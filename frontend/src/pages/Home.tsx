@@ -97,6 +97,7 @@ export default function Home() {
             options={lastRoute?.options ?? []}
             activeStrategy={selectedStrategy}
             showRiskRadar={showRiskRadar}
+            vesselId={1}
           />
         </div>
 
