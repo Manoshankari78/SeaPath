@@ -121,3 +121,18 @@ class Report(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     voyage = relationship("Voyage", back_populates="reports")
+
+
+# --- Live vessel positions -------------------------------------------------
+class VesselPosition(Base):
+    __tablename__ = "vessel_positions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vessel_id = Column(Integer, nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    speed_knots = Column(Float, nullable=True)
+    heading_deg = Column(Float, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    fuel_remaining_tons = Column(Float, nullable=True)
+    distance_remaining_nm = Column(Float, nullable=True)
