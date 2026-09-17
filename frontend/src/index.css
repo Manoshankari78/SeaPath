@@ -18,3 +18,12 @@ body {
   height: 100%;
   border-radius: 0.75rem;
 }
+
+/* Leaflet divIcons ship with a white box and border by default; strip it so
+   our custom SVG ship / port markers render cleanly. */
+.seapath-ship-marker,
+.seapath-port-marker,
+.seapath-endpoint-marker {
+  background: transparent;
+  border: 0;
+}

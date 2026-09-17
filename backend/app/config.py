@@ -53,3 +53,40 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 ALERT_RISK_THRESHOLD = 0.5
 # Fractional change in a route's risk/fuel that triggers a RouteChange alert
 REROUTE_CHANGE_THRESHOLD = 0.15
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+# --- Live vessel tracking / AIS ---------------------------------------------
+# "mock"  -> MockAISProvider: positions come from the built-in voyage
+#            simulator. Clearly labelled as simulated in the API and UI.
+# "real"  -> RealAISProvider: reads from a commercial AIS feed configured
+#            via AIS_API_URL / AIS_API_KEY. Not enabled by default because
+#            AIS feeds are paid services.
+AIS_PROVIDER = os.getenv("AIS_PROVIDER", "mock").strip().lower()
+AIS_API_URL = os.getenv("AIS_API_URL", "")
+AIS_API_KEY = os.getenv("AIS_API_KEY", "")  # never hard-code — env only
+
+# Master switch: when false, tracking endpoints return 503 rather than 404,
+# so the frontend can hide live-tracking UI cleanly.
+ENABLE_LIVE_TRACKING = _env_bool("ENABLE_LIVE_TRACKING", True)
+
+# Seconds between position pushes over the WebSocket / expected polling period.
+LOCATION_UPDATE_INTERVAL = float(os.getenv("LOCATION_UPDATE_INTERVAL", "5"))
+
+# Minimum seconds between writing a position row to the database. Decoupled
+# from the push interval so a 5s live feed doesn't produce 720 rows/hour.
+POSITION_PERSIST_INTERVAL_S = float(os.getenv("POSITION_PERSIST_INTERVAL_S", "60"))
+
+# Cap on how many historical positions a single track request returns.
+MAX_TRACK_POINTS = int(os.getenv("MAX_TRACK_POINTS", "500"))
+
+# Wave height (m) at the vessel's live position that triggers a StormWarning
+# alert via the existing alert architecture.
+LIVE_ALERT_WAVE_HEIGHT_M = float(os.getenv("LIVE_ALERT_WAVE_HEIGHT_M", "4.0"))
+
+# Minimum seconds between repeat live alerts for the same voyage, so a vessel
+# sitting inside a storm cell doesn't spam the alert feed.
+LIVE_ALERT_COOLDOWN_S = float(os.getenv("LIVE_ALERT_COOLDOWN_S", "1800"))

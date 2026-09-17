@@ -13,19 +13,26 @@ seapath/
 ├── backend/            FastAPI app, routing engine, ML fuel model, DB
 │   └── app/
 │       ├── routing/     geo math, land mask, grid, A* pathfinding, cost model
-│       ├── services/    weather client, fuel ML model, emissions, PDF reports, route planner
-│       ├── api/         REST endpoints (auth, routing, fleet, voyages, alerts, weather)
+│       ├── services/    weather client, fuel ML model, emissions, PDF reports,
+│       │                 route planner, port seeding, voyage simulator, tracking
+│       │                 └── ais/   AISProvider interface + mock/real providers
+│       ├── data/        indian_ports.py — seeded Indian port dataset
+│       ├── api/         REST endpoints (auth, routing, fleet, voyages, alerts,
+│       │                 weather, ports, tracking + WebSocket)
 │       ├── db/          SQLAlchemy models (User, Vessel, Voyage, Waypoint,
-│       │                 WeatherSnapshot, Alert, Report) + session
+│       │                 WeatherSnapshot, Alert, Report, VesselPosition, Port)
 │       └── security.py  password hashing + JWT
 └── frontend/            React + TS + Tailwind app
     └── src/
-        ├── components/  MapView (+risk radar), RouteForm, comparison cards,
-        │                 simulator, alerts dropdown, nav bar, protected route
+        ├── components/  MapView (+risk radar, ship marker, track, ports),
+        │                 RouteForm, PortSearch, ShipMarker, PortMarkers,
+        │                 LiveVesselPanel, comparison cards, alerts, nav bar
+        ├── hooks/        useVesselTracking (WebSocket + polling fallback)
         ├── pages/        Home (planner), Fleet, History, Login, Register
         ├── context/      AuthContext (JWT session)
         ├── api/          typed axios client (auto-attaches JWT)
-        └── store/        Zustand global state
+        ├── store/        Zustand global state
+        └── test/         Vitest + Testing Library suites
 ```
 
 ## How routing works
@@ -68,6 +75,31 @@ seapath/
   finds saved voyages passing within a radius of a point using a real
   `ST_DWithin` geography query (falls back to a Python haversine calculation
   on SQLite).
+
+### New in v1.1 — Indian ports & live tracking
+
+- **Indian port search** — a seeded dataset of 45 Indian ports (all 12 Major
+  Ports plus major non-major/private ports) with searchable, keyboard-accessible
+  origin/destination dropdowns. Search by port name, state, or UN/LOCODE.
+- **Live ship tracking** — the vessel's current position streams to the map
+  over a WebSocket (with an automatic polling fallback), rendered as a
+  heading-rotated ship marker.
+- **AIS provider architecture** — positions are read through a pluggable
+  `AISProvider` interface. Ships with `MockAISProvider` (the built-in voyage
+  simulator) so the project is fully demonstrable without a paid AIS feed;
+  a real feed is an environment-variable swap.
+- **Demo ship simulation** — the vessel moves along the *actual A\*-calculated
+  route*, interpolated between waypoints for smooth motion. Start / pause /
+  reset with 1x–10x playback.
+- **Voyage progress** — distance travelled, distance remaining, percentage and
+  ETA, all derived from real route geometry.
+- **Ship track history** — persisted breadcrumb positions drawn as a polyline,
+  visually distinct from the remaining (dashed) route.
+- **Live vessel weather & risk** — the existing Open-Meteo client and wave-risk
+  model are re-used at the vessel's current position, raising `StormWarning`
+  alerts through the existing alert system when conditions deteriorate.
+- **Port map overlay** — toggle **Show Indian Ports** to plot every port; click
+  one to set it as origin or destination.
 
 ## Quick start (local, no Docker)
 
@@ -209,21 +241,114 @@ psql "$DATABASE_URL"
 SELECT PostGIS_Version();   -- only works if the extension is enabled
 ```
 
+## Live tracking configuration
+
+All values have working defaults — the app runs with no `.env` at all. See
+`backend/.env.example`.
+
+```env
+AIS_PROVIDER=mock              # mock | real
+LOCATION_UPDATE_INTERVAL=5     # seconds between position pushes
+ENABLE_LIVE_TRACKING=true      # master switch for all tracking endpoints
+POSITION_PERSIST_INTERVAL_S=60 # min seconds between DB position writes
+MAX_TRACK_POINTS=500           # cap on history returned per track request
+LIVE_ALERT_WAVE_HEIGHT_M=4.0   # wave height that raises a StormWarning
+```
+
+### How live tracking works
+
+```
+AIS provider (MockAISProvider | RealAISProvider)
+        |                 selected by AIS_PROVIDER
+        v
+Backend tracking service  (throttled persistence, weather + risk, alerts)
+        |
+        v
+WebSocket  /ws/vessels/{id}/location     <-- preferred
+   or polling  GET /api/vessels/{id}/location   <-- automatic fallback
+        |
+        v
+Frontend  useVesselTracking hook -> Zustand store
+        |
+        v
+Leaflet ship marker (rotated to heading) + track polyline
+```
+
+**Simulated positions are never presented as real AIS data.** Every position
+carries `source` and `is_simulated`, and the UI renders a
+`LIVE TRACKING — DEMO SIMULATION` badge whenever the mock provider is active.
+
+### Switching to a real AIS feed
+
+1. Set `AIS_PROVIDER=real`, `AIS_API_URL` and `AIS_API_KEY` in the environment
+   (never commit these).
+2. Implement `_parse_vessel()` in `backend/app/services/ais/real_provider.py`
+   to normalise your vendor's payload into a `VesselFix`.
+3. Add an `mmsi` (or `imo`) column to the `Vessel` model to map SeaPath vessel
+   IDs onto AIS identifiers.
+
+Nothing else changes — the API, WebSocket, store and map all consume the same
+`VesselFix` shape. Until step 2 is done the real provider returns no positions
+rather than silently falling back to simulated data.
+
+### How port search works
+
+```
+backend/app/data/indian_ports.py   (dataset, extensible)
+        |  seed_ports() upserts on every boot
+        v
+ports table  ->  GET /api/ports?search=&state=&port_type=
+        |
+        v
+Frontend loads once, filters locally  ->  PortSearch dropdown
+        |
+        v
+Selected port -> latitude / longitude -> existing A* routing engine
+```
+
+To add a port, append a record to `INDIAN_PORTS` and restart. The seed is an
+idempotent upsert keyed on `id`, so no migration is needed.
+
 ## Using the app
 
 1. **Register** an account (Operator role by default).
 2. Go to **Fleet Dashboard** and add a vessel — voyages are linked to a
    vessel ID.
-3. Go to **Route Planner**, pick a preset or enter coordinates, and click
-   **Optimize Route**. Three route options render on the map. Toggle
-   **Risk radar overlay** to see wave/wind risk color-coded along the route.
-4. Click a comparison card to preview that route, or **Save to voyage
-   history** to persist it (this also raises a StormWarning alert if the
-   route crosses high-risk weather).
-5. In **Voyage History**, update a voyage's status, download its PDF report,
+3. Go to **Route Planner** and search for an **Origin** and **Destination**
+   port (type a name, a state, or a UN/LOCODE — e.g. "Chennai", "Kerala",
+   "INBOM"). Pick the vessel you just added, then click **Calculate Route**.
+   Three route options render on the map. Toggle **Risk radar overlay** to see
+   wave/wind risk color-coded along the route, or **Show Indian Ports** to plot
+   every port and set origin/destination straight from the map.
+4. Click a comparison card to preview that route, or start the voyage to
+   persist it and begin live tracking (this also raises a StormWarning alert if
+   the route crosses high-risk weather).
+5. Use the **live tracking panel** to Start / Pause / Reset the simulation and
+   change playback speed. The ship marker moves along the calculated route,
+   leaving a green track behind it; progress, ETA and current wave/wind risk
+   update as it sails. **Track Ship** re-centres the map on the vessel.
+6. In **Voyage History**, update a voyage's status, download its PDF report,
    or click **Re-optimize now** to simulate dynamic re-routing against
    current conditions.
-6. Check the 🔔 bell in the nav bar for alerts.
+7. Check the 🔔 bell in the nav bar for alerts.
+
+## Testing
+
+```bash
+# Backend (71 tests: ports, simulation, tracking, auth scoping, WebSocket)
+cd backend
+source .venv/bin/activate
+pip install pytest httpx
+pytest -q
+
+# Frontend (33 tests: port dropdown, tracking panel, store)
+cd frontend
+npm install
+npm test
+```
+
+Tests use a throwaway SQLite database and the mock AIS provider, so no network
+access or external services are required.
 
 ## Extending toward production
 

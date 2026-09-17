@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.db.session import Base
@@ -34,6 +34,9 @@ class Vessel(Base):
 
     owner = relationship("User", back_populates="vessels")
     voyages = relationship("Voyage", back_populates="vessel")
+    positions = relationship(
+        "VesselPosition", back_populates="vessel", cascade="all, delete-orphan"
+    )
 
 
 class Voyage(Base):
@@ -69,6 +72,9 @@ class Voyage(Base):
     waypoints = relationship("Waypoint", back_populates="voyage", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="voyage", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="voyage", cascade="all, delete-orphan")
+    positions = relationship(
+        "VesselPosition", back_populates="voyage", cascade="all, delete-orphan"
+    )
 
 
 class Waypoint(Base):
@@ -125,14 +131,60 @@ class Report(Base):
 
 # --- Live vessel positions -------------------------------------------------
 class VesselPosition(Base):
+    """A single timestamped AIS-style position report for a vessel.
+
+    Rows are appended by the tracking service (see services/tracking.py) at a
+    throttled interval — see POSITION_PERSIST_INTERVAL_S — so a long voyage
+    produces a reviewable track without unbounded high-frequency writes.
+    """
+
     __tablename__ = "vessel_positions"
 
     id = Column(Integer, primary_key=True, index=True)
-    vessel_id = Column(Integer, nullable=False, index=True)
+    vessel_id = Column(Integer, ForeignKey("vessels.id"), nullable=False, index=True)
+    voyage_id = Column(Integer, ForeignKey("voyages.id"), nullable=True, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     speed_knots = Column(Float, nullable=True)
     heading_deg = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="UNDERWAY")  # UNDERWAY | MOORED | STOPPED | ARRIVED
+    source = Column(String, default="simulated")  # simulated | ais | manual
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     fuel_remaining_tons = Column(Float, nullable=True)
     distance_remaining_nm = Column(Float, nullable=True)
+
+    vessel = relationship("Vessel", back_populates="positions")
+    voyage = relationship("Voyage", back_populates="positions")
+
+
+# composite index: the hot query is "latest positions for this vessel"
+Index("ix_vessel_positions_vessel_time", VesselPosition.vessel_id, VesselPosition.timestamp)
+
+
+# --- Port reference data ----------------------------------------------------
+class Port(Base):
+    """Reference table of Indian ports, seeded from app/data/indian_ports.py.
+
+    Uses a string primary key (e.g. "IN_CHENNAI") so the dataset is the source
+    of truth and re-seeding is a stable upsert rather than an append.
+    """
+
+    __tablename__ = "ports"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False, index=True)
+    display_name = Column(String, nullable=False)
+    state = Column(String, nullable=False, index=True)
+    country = Column(String, nullable=False, default="India")
+    latitude = Column(Float, nullable=False, index=True)
+    longitude = Column(Float, nullable=False, index=True)
+    port_type = Column(String, nullable=False, index=True)
+    port_code = Column(String, nullable=True, index=True)  # UN/LOCODE where known
+    description = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# supports the "ports within this map viewport" bounding-box query
+Index("ix_ports_lat_lon", Port.latitude, Port.longitude)
