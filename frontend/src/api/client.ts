@@ -3,14 +3,21 @@ import type {
   AlertOut,
   AlertStatus,
   AuthResponse,
+  Port,
+  PortListResponse,
   RouteRequest,
   RouteResponse,
+  SimulationControl,
+  TrackingStatus,
   User,
   VesselCreate,
   VesselOut,
+  VesselPosition,
+  VesselTrackResponse,
   VoyageCreate,
   VoyageOut,
   VoyageStatus,
+  VoyageTracking,
   WaypointOut,
   WeatherPoint,
 } from "../types";
@@ -91,6 +98,59 @@ export const api = {
 
   updateAlertStatus: (id: number, status: AlertStatus) =>
     client.patch<AlertOut>(`/alerts/${id}`, { status }).then((r) => r.data),
+
+  // --- ports ---
+  listPorts: (params?: { search?: string; state?: string; port_type?: string }) =>
+    client.get<PortListResponse>("/ports", { params }).then((r) => r.data),
+
+  getPort: (portId: string) => client.get<Port>(`/ports/${portId}`).then((r) => r.data),
+
+  listPortStates: () => client.get<string[]>("/ports/states").then((r) => r.data),
+
+  // --- live tracking ---
+  trackingStatus: () => client.get<TrackingStatus>("/tracking/status").then((r) => r.data),
+
+  vesselLocation: (vesselId: number) =>
+    client.get<VesselPosition>(`/vessels/${vesselId}/location`).then((r) => r.data),
+
+  reportVesselLocation: (vesselId: number, body: Partial<VesselPosition>) =>
+    client.post<VesselPosition>(`/vessels/${vesselId}/location`, body).then((r) => r.data),
+
+  vesselTrack: (vesselId: number, voyageId?: number) =>
+    client
+      .get<VesselTrackResponse>(`/vessels/${vesselId}/track`, {
+        params: voyageId ? { voyage_id: voyageId } : undefined,
+      })
+      .then((r) => r.data),
+
+  fleetLocations: () =>
+    client.get<VesselPosition[]>("/vessels/locations").then((r) => r.data),
+
+  voyageTracking: (voyageId: number) =>
+    client.get<VoyageTracking>(`/voyages/${voyageId}/tracking`).then((r) => r.data),
+
+  controlSimulation: (voyageId: number, control: SimulationControl) =>
+    client.post<VoyageTracking>(`/voyages/${voyageId}/tracking`, control).then((r) => r.data),
+
+  /**
+   * WebSocket URL for a vessel's live position feed.
+   *
+   * A browser cannot set an Authorization header on a WebSocket handshake,
+   * so the JWT travels as a query parameter — the backend validates it with
+   * the same signature check used by the REST dependency.
+   */
+  vesselLocationSocketUrl: (vesselId: number): string | null => {
+    const token = localStorage.getItem("seapath_token");
+    if (!token) return null;
+
+    const base = import.meta.env.VITE_API_BASE_URL;
+    let origin = window.location.origin;
+    if (base && /^https?:\/\//i.test(base)) {
+      origin = new URL(base).origin;
+    }
+    const wsOrigin = origin.replace(/^http/i, "ws");
+    return `${wsOrigin}/ws/vessels/${vesselId}/location?token=${encodeURIComponent(token)}`;
+  },
 };
 
 export default api;

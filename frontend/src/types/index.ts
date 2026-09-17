@@ -147,3 +147,104 @@ export interface AlertOut {
   created_at: string;
 }
 
+
+// --- Ports -----------------------------------------------------------------
+export type PortType = "Major Port" | "Other Port";
+
+export interface Port {
+  id: string;
+  name: string;
+  display_name: string;
+  state: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  port_type: string;
+  port_code?: string | null;
+  description?: string | null;
+}
+
+export interface PortListResponse {
+  ports: Port[];
+  count: number;
+}
+
+// --- Live tracking ----------------------------------------------------------
+export type VesselStatus = "UNDERWAY" | "MOORED" | "STOPPED" | "ARRIVED" | "UNKNOWN";
+export type PositionSource = "simulated" | "ais" | "manual";
+
+export interface VesselPosition {
+  vessel_id: number;
+  voyage_id?: number | null;
+  latitude: number;
+  longitude: number;
+  speed_knots: number;
+  heading_deg: number;
+  status: VesselStatus;
+  source: PositionSource;
+  is_simulated: boolean;
+  timestamp: string;
+  distance_travelled_nm?: number | null;
+  distance_remaining_nm?: number | null;
+  progress_percent?: number | null;
+  eta?: string | null;
+}
+
+export interface TrackPoint {
+  latitude: number;
+  longitude: number;
+  speed_knots?: number | null;
+  heading_deg?: number | null;
+  timestamp: string;
+}
+
+export interface VesselTrackResponse {
+  vessel_id: number;
+  voyage_id?: number | null;
+  points: TrackPoint[];
+  count: number;
+}
+
+export interface LiveConditions {
+  weather: WeatherPoint;
+  wave_risk: number;
+  wind_risk: number;
+  overall_risk: number;
+  wave_risk_label: string;
+  wind_risk_label: string;
+  overall_risk_label: string;
+}
+
+export interface VoyageTracking {
+  voyage_id: number;
+  vessel_id: number;
+  vessel_name?: string | null;
+  start_port?: string | null;
+  end_port?: string | null;
+  status: string;
+  simulation_running: boolean;
+  speed_multiplier: number;
+  position?: VesselPosition | null;
+  total_distance_nm: number;
+  distance_travelled_nm: number;
+  distance_remaining_nm: number;
+  progress_percent: number;
+  eta?: string | null;
+  conditions?: LiveConditions | null;
+}
+
+export type SimulationAction = "start" | "pause" | "reset" | "speed";
+
+export interface SimulationControl {
+  action: SimulationAction;
+  speed_multiplier?: number;
+}
+
+export interface TrackingStatus {
+  enabled: boolean;
+  provider: string;
+  simulated: boolean;
+  label: string;
+  detail: string;
+  update_interval_s: number;
+}
