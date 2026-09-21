@@ -50,8 +50,6 @@ interface MapViewProps {
   options: RouteOption[];
   activeStrategy: string;
   showRiskRadar?: boolean;
-
-  // --- live tracking (all optional: the map works exactly as before without them) ---
   vesselId?: number | null;
   vesselName?: string;
   vesselPosition?: VesselPosition | null;
@@ -62,7 +60,6 @@ interface MapViewProps {
   showPorts?: boolean;
   onSetOriginPort?: (port: Port) => void;
   onSetDestinationPort?: (port: Port) => void;
-  /** Bumping this number re-centres the map on the vessel. */
   focusVesselSignal?: number;
 }
 
@@ -102,6 +99,7 @@ export default function MapView({
   options,
   activeStrategy,
   showRiskRadar = false,
+  vesselId: _vesselId,
   vesselName = "Vessel",
   vesselPosition = null,
   vesselTrack = [],

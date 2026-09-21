@@ -99,8 +99,11 @@ seapath/
   model are re-used at the vessel's current position, raising `StormWarning`
   alerts through the existing alert system when conditions deteriorate.
 - **Port map overlay** — toggle **Show Indian Ports** to plot every port; click
-  one to set it as origin or destination.
-
+  one to set - **Conditions at current location** — a card that uses the browser's
+  geolocation (on explicit click, not automatically) to show live wave,
+  wind and sea-temperature conditions at wherever you're standing, reusing
+  the same weather service as the origin/destination cards.
+  
 ## Quick start (local, no Docker)
 
 ### Backend

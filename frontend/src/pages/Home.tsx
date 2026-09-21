@@ -3,6 +3,7 @@ import { Globe } from "lucide-react";
 import AlertBanner from "../components/AlertBanner";
 import LiveVesselPanel from "../components/LiveVesselPanel";
 import MapView from "../components/MapView";
+import CurrentLocationWeatherCard from "../components/CurrentLocationWeatherCard";
 import MarineWeatherCard from "../components/MarineWeatherCard";
 import RiskRadarLegend from "../components/RiskRadarLegend";
 import RouteComparisonCards from "../components/RouteComparisonCards";
@@ -263,11 +264,14 @@ export default function Home() {
         {lastRoute && <AlertBanner options={lastRoute.options} warnings={lastRoute.warnings} />}
 
         {lastRoute && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <MarineWeatherCard label="Conditions at origin" point={lastRoute.origin} />
             <MarineWeatherCard label="Conditions at destination" point={lastRoute.destination} />
+            <CurrentLocationWeatherCard />
           </div>
         )}
+
+        {!lastRoute && <CurrentLocationWeatherCard />}
 
         {lastRoute && (
           <RouteComparisonCards
