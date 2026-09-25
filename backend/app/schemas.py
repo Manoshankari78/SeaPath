@@ -62,6 +62,10 @@ class RouteRequest(BaseModel):
     depart_time: Optional[datetime] = None
 
 
+class VoyageReoptimizeRequest(BaseModel):
+    current_position: Coordinate
+
+
 class RoutePoint(BaseModel):
     lat: float
     lon: float
@@ -97,6 +101,7 @@ class VesselCreate(BaseModel):
     draft_m: float = 10.0
     deadweight_tons: float = 20000.0
     fuel_rate_ton_per_hr: Optional[float] = None
+    mmsi: Optional[str] = Field(None, pattern=r"^\d{9}$")
 
 
 class VesselOut(VesselCreate):
@@ -105,6 +110,10 @@ class VesselOut(VesselCreate):
 
     class Config:
         from_attributes = True
+
+
+class VesselMmsiUpdate(BaseModel):
+    mmsi: Optional[str] = Field(None, pattern=r"^\d{9}$")
 
 
 # --- Voyages ---------------------------------------------------------------

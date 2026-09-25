@@ -71,6 +71,7 @@ export interface VesselCreate {
   draft_m: number;
   deadweight_tons: number;
   fuel_rate_ton_per_hr?: number | null;
+  mmsi?: string | null;
 }
 
 export interface VesselOut extends VesselCreate {

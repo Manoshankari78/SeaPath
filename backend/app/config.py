@@ -62,12 +62,12 @@ def _env_bool(name: str, default: bool) -> bool:
 # --- Live vessel tracking / AIS ---------------------------------------------
 # "mock"  -> MockAISProvider: positions come from the built-in voyage
 #            simulator. Clearly labelled as simulated in the API and UI.
-# "real"  -> RealAISProvider: reads from a commercial AIS feed configured
-#            via AIS_API_URL / AIS_API_KEY. Not enabled by default because
-#            AIS feeds are paid services.
+# "real"      -> generic commercial AIS REST adapter.
+# "aisstream" -> AISstream.io WebSocket with MMSI-mapped fleet vessels.
 AIS_PROVIDER = os.getenv("AIS_PROVIDER", "mock").strip().lower()
 AIS_API_URL = os.getenv("AIS_API_URL", "")
 AIS_API_KEY = os.getenv("AIS_API_KEY", "")  # never hard-code — env only
+AISSTREAM_STALE_SECONDS = int(os.getenv("AISSTREAM_STALE_SECONDS", "180"))
 
 # Master switch: when false, tracking endpoints return 503 rather than 404,
 # so the frontend can hide live-tracking UI cleanly.

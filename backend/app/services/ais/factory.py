@@ -5,7 +5,8 @@ Swapping the demo simulator for a real feed is an environment change, not a
 code change:
 
     AIS_PROVIDER=mock   # default — simulated positions, clearly labelled
-    AIS_PROVIDER=real   # commercial AIS feed (see real_provider.py)
+    AIS_PROVIDER=real       # generic REST feed adapter
+    AIS_PROVIDER=aisstream  # AISstream.io WebSocket feed
 """
 from __future__ import annotations
 
@@ -16,12 +17,14 @@ from app.config import AIS_PROVIDER
 from app.services.ais.base import AISProvider
 from app.services.ais.mock_provider import MockAISProvider
 from app.services.ais.real_provider import RealAISProvider
+from app.services.ais.aisstream_provider import AISStreamProvider
 
 logger = logging.getLogger("seapath.ais")
 
 _PROVIDERS: dict[str, type[AISProvider]] = {
     "mock": MockAISProvider,
     "real": RealAISProvider,
+    "aisstream": AISStreamProvider,
 }
 
 

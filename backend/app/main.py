@@ -15,7 +15,7 @@ from app.api import (
     weather_routes,
 )
 from app.config import ALLOWED_ORIGINS
-from app.db.session import Base, engine, ensure_postgis_extension
+from app.db.session import Base, engine, ensure_postgis_extension, migrate_existing_schema
 from app.services.port_seed import seed_ports
 
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +23,7 @@ logger = logging.getLogger("seapath")
 
 ensure_postgis_extension()
 Base.metadata.create_all(bind=engine)
+migrate_existing_schema()
 
 # Populate the port reference table. Idempotent — safe to run on every boot.
 seed_ports()

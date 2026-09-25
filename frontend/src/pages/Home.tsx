@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Globe } from "lucide-react";
 import AlertBanner from "../components/AlertBanner";
 import LiveVesselPanel from "../components/LiveVesselPanel";
@@ -54,6 +54,9 @@ export default function Home() {
   const [selectedVesselId, setSelectedVesselId] = useState<number | null>(null);
   const [portsLoading, setPortsLoading] = useState(false);
   const [focusSignal, setFocusSignal] = useState(0);
+  const [reoptimizing, setReoptimizing] = useState(false);
+  const rerouteInFlight = useRef(false);
+  const lastReroutePosition = useRef<{ voyageId: number; lat: number; lon: number } | null>(null);
 
   // --- load the port dataset once, then filter locally -------------------
   useEffect(() => {
@@ -83,6 +86,55 @@ export default function Home() {
     enabled: Boolean(activeVesselId && activeVoyageId),
   });
 
+  // Recalculate from the moving ship's actual position during demo playback.
+  // The interval reads the latest store snapshot so frequent position updates
+  // do not continually restart its timer.
+  useEffect(() => {
+    if (!activeVoyageId || !activeVesselId) return;
+    rerouteInFlight.current = false;
+    lastReroutePosition.current = null;
+    const timer = window.setInterval(async () => {
+      const state = useAppStore.getState();
+      const position = state.currentVesselPosition;
+      if (
+        !position ||
+        state.voyageProgress?.simulation_running !== true ||
+        rerouteInFlight.current
+      ) return;
+      const previous = lastReroutePosition.current;
+      if (previous?.voyageId === activeVoyageId) {
+        const latDelta = (position.latitude - previous.lat) * 111;
+        const lonDelta =
+          (position.longitude - previous.lon) * 111 *
+          Math.cos((position.latitude * Math.PI) / 180);
+        if (Math.hypot(latDelta, lonDelta) < 0.5) return;
+      }
+      rerouteInFlight.current = true;
+      setReoptimizing(true);
+      try {
+        const response = await api.reoptimizeVoyage(activeVoyageId, {
+          lat: position.latitude,
+          lon: position.longitude,
+        });
+        if (response.options.length) {
+          lastReroutePosition.current = {
+            voyageId: activeVoyageId,
+            lat: position.latitude,
+            lon: position.longitude,
+          };
+          setLastRoute({ ...response, origin: state.lastRoute?.origin ?? response.origin });
+          setSavedMsg("Route dynamically re-optimized from the ship’s current position using A* and the Random Forest fuel estimate.");
+        }
+      } catch {
+        // Keep playback going if a weather or routing request is temporarily unavailable.
+      } finally {
+        rerouteInFlight.current = false;
+        setReoptimizing(false);
+      }
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [activeVoyageId, activeVesselId, setLastRoute]);
+
   async function handleSubmit(
     origin: Coordinate,
     destination: Coordinate,
@@ -105,14 +157,27 @@ export default function Home() {
   /** Saves the chosen route as a voyage and begins live tracking on it. */
   async function handleStartVoyage(opt: RouteOption) {
     if (!lastRoute) return;
-    if (!selectedVesselId) {
-      setSavedMsg("Select a fleet vessel first — live tracking needs a saved vessel.");
-      return;
-    }
-
+    setSavedMsg(null);
     try {
+      // The planner offers an ad-hoc profile. Create a demo fleet record on
+      // demand so that profile can be attached to a trackable voyage.
+      let vesselId = selectedVesselId;
+      if (!vesselId) {
+        const created = await api.createVessel({
+          name: lastRoute.vessel.name || "SeaPath Demo Vessel",
+          vessel_type: lastRoute.vessel.vessel_type,
+          cruise_speed_knots: lastRoute.vessel.cruise_speed_knots,
+          draft_m: lastRoute.vessel.draft_m,
+          deadweight_tons: lastRoute.vessel.deadweight_tons,
+          fuel_rate_ton_per_hr: lastRoute.vessel.fuel_rate_ton_per_hr ?? null,
+        });
+        vesselId = created.id;
+        setSelectedVesselId(created.id);
+        setFleet((current) => [...current, created]);
+      }
+
       const voyage = await api.createVoyage({
-        vessel_id: selectedVesselId,
+        vessel_id: vesselId,
         start_port: selectedOriginPort?.name,
         end_port: selectedDestinationPort?.name,
         origin: lastRoute.origin,
@@ -128,11 +193,18 @@ export default function Home() {
       });
 
       resetTracking();
-      setActiveVessel(selectedVesselId, voyage.id);
+      setActiveVessel(vesselId, voyage.id);
       await api.controlSimulation(voyage.id, { action: "start" });
       setSavedMsg(`Voyage #${voyage.id} started — tracking the ${opt.strategy} route.`);
-    } catch {
-      setSavedMsg("Could not start the voyage. Add a vessel to your fleet first.");
+    } catch (e: unknown) {
+      const detail = (e as { response?: { status?: number; data?: { detail?: string } } })?.response;
+      setSavedMsg(
+        detail?.status === 401
+          ? "Your session has expired. Log in again, then start the demo voyage."
+          : detail?.data?.detail
+            ? `Could not start the voyage: ${detail.data.detail}`
+            : "Could not start the demo voyage. Check that the backend is running, then try again."
+      );
     }
   }
 
@@ -177,6 +249,11 @@ export default function Home() {
         {savedMsg && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {savedMsg}
+          </div>
+        )}
+        {reoptimizing && (
+          <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+            Recalculating the remaining route and fuel estimate from the ship’s current position…
           </div>
         )}
 

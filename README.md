@@ -294,6 +294,27 @@ Nothing else changes — the API, WebSocket, store and map all consume the same
 `VesselFix` shape. Until step 2 is done the real provider returns no positions
 rather than silently falling back to simulated data.
 
+### Using AISstream.io
+
+SeaPath also includes a server-side AISstream WebSocket adapter. Set the
+following in the repository-root `.env` file (Compose passes them only to the
+backend):
+
+```env
+AIS_PROVIDER=aisstream
+AIS_API_URL=wss://stream.aisstream.io/v0/stream
+AIS_API_KEY=your_private_aisstream_key
+AISSTREAM_STALE_SECONDS=180
+```
+
+Add a vessel's nine-digit MMSI in the Fleet form, then restart the backend so
+the AISstream subscription includes it. The backend keeps one WebSocket open,
+filters the subscription to fleet MMSIs, and the existing API/UI display the
+received positions. Use one backend process because AISstream limits open
+connections per account and originating IP. Positions older than the stale
+limit are omitted. Never expose or commit the API key. A valid AISstream key
+and MMSI are required; the placeholder key does not authenticate.
+
 ### How port search works
 
 ```

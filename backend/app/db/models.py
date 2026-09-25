@@ -31,6 +31,7 @@ class Vessel(Base):
     draft_m = Column(Float, default=10.0)
     deadweight_tons = Column(Float, default=20000.0)
     fuel_rate_ton_per_hr = Column(Float, nullable=True)  # overrides type default if set
+    mmsi = Column(String(9), nullable=True, unique=True, index=True)
 
     owner = relationship("User", back_populates="vessels")
     voyages = relationship("Voyage", back_populates="vessel")

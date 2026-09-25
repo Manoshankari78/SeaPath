@@ -68,7 +68,7 @@ export default function RouteComparisonCards({ options, activeStrategy, onSelect
             }}
             className="mt-3 w-full rounded-md bg-slate-50 py-1.5 text-xs font-semibold text-deepblue hover:bg-slate-100"
           >
-            Save to voyage history
+            Start demo voyage
           </button>
         </button>
       ))}

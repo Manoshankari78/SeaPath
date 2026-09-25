@@ -124,7 +124,7 @@ export default function RouteForm({
       { lat: originPort.latitude, lon: originPort.longitude },
       { lat: destinationPort.latitude, lon: destinationPort.longitude },
       {
-        name: selectedVessel?.name ?? "Planned Voyage",
+        name: selectedVessel?.name ?? "SeaPath Demo Vessel",
         vessel_type: vesselType,
         cruise_speed_knots: speed,
         draft_m: draft,
@@ -202,7 +202,7 @@ export default function RouteForm({
         </select>
         {fleet.length === 0 && (
           <p className="mt-1 text-xs text-slate-400">
-            Add a vessel on the Fleet page to enable voyage saving and live tracking.
+            A demo vessel will be added to your fleet automatically when you start a voyage.
           </p>
         )}
       </div>

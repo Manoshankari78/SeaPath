@@ -87,7 +87,8 @@ export function useVesselTracking({ vesselId, voyageId, enabled }: UseVesselTrac
       } catch (e: unknown) {
         // 404 simply means no simulation is running yet — not an error state.
         const status = (e as { response?: { status?: number } })?.response?.status;
-        if (status !== 404) setError("Lost contact with the vessel position feed.");
+        if (status === 401) setError("Your session expired. Log in again to reconnect to this voyage.");
+        else if (status !== 404) setError("Lost contact with the vessel position feed.");
       }
     };
 

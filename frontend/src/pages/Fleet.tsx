@@ -39,6 +39,8 @@ export default function Fleet() {
   const [draft, setDraft] = useState(10);
   const [deadweight, setDeadweight] = useState(20000);
   const [fuelRate, setFuelRate] = useState<number | "">("");
+  const [mmsi, setMmsi] = useState("");
+  const [mmsiEdits, setMmsiEdits] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,9 +100,11 @@ export default function Fleet() {
         draft_m: draft,
         deadweight_tons: deadweight,
         fuel_rate_ton_per_hr: fuelRate === "" ? null : fuelRate,
+        mmsi: mmsi.trim() || null,
       });
       setName("");
       setFuelRate("");
+      setMmsi("");
       refresh();
     } catch {
       setError("Could not add that vessel. Please check the details and try again.");
@@ -113,6 +117,18 @@ export default function Fleet() {
       refresh();
     } catch {
       setError("Could not remove that vessel.");
+    }
+  }
+
+  async function handleSaveMmsi(id: number) {
+    try {
+      const updated = await api.updateVesselMmsi(id, mmsiEdits[id]?.trim() || null);
+      setVessels((current) => current.map((v) => v.id === id ? updated : v));
+      setMmsiEdits((current) => { const next = { ...current }; delete next[id]; return next; });
+      setError(null);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail ?? "Could not save the MMSI. Check that it has nine digits and is not assigned to another vessel.");
     }
   }
 
@@ -153,7 +169,7 @@ export default function Fleet() {
 
       <form
         onSubmit={handleAdd}
-        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-100 bg-white p-5 shadow-sm sm:grid-cols-3 lg:grid-cols-6"
+        className="grid grid-cols-1 gap-3 rounded-xl border border-slate-100 bg-white p-5 shadow-sm sm:grid-cols-3 lg:grid-cols-4"
       >
         <input
           className="rounded-md border border-slate-200 px-3 py-2 text-sm sm:col-span-2"
@@ -201,6 +217,16 @@ export default function Fleet() {
           onChange={(e) => setFuelRate(e.target.value === "" ? "" : Number(e.target.value))}
           placeholder="Fuel rate (t/hr, optional)"
         />
+        <input
+          inputMode="numeric"
+          pattern="[0-9]{9}"
+          maxLength={9}
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm"
+          value={mmsi}
+          onChange={(e) => setMmsi(e.target.value.replace(/\D/g, "").slice(0, 9))}
+          placeholder="MMSI (9 digits, AIS)"
+          aria-label="Vessel MMSI for AIS tracking"
+        />
         <button className="rounded-md bg-deepblue px-3 py-2 text-sm font-semibold text-white hover:bg-navy sm:col-span-3 lg:col-span-1">
           Add vessel
         </button>
@@ -244,6 +270,29 @@ export default function Fleet() {
                   <Row label="Cruise speed" value={`${v.cruise_speed_knots} kn`} />
                   <Row label="Draft" value={`${v.draft_m} m`} />
                   <Row label="Deadweight" value={`${v.deadweight_tons.toLocaleString()} t`} />
+                  {v.mmsi && <Row label="MMSI" value={v.mmsi} />}
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]{9}"
+                      maxLength={9}
+                      className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+                      value={mmsiEdits[v.id] ?? v.mmsi ?? ""}
+                      onChange={(e) => setMmsiEdits((current) => ({
+                        ...current,
+                        [v.id]: e.target.value.replace(/\D/g, "").slice(0, 9),
+                      }))}
+                      placeholder="AIS MMSI (9 digits)"
+                      aria-label={`MMSI for ${v.name}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveMmsi(v.id)}
+                      className="rounded-md border border-slate-200 px-2 py-1.5 text-xs font-medium text-deepblue hover:bg-slate-50"
+                    >
+                      Save MMSI
+                    </button>
+                  </div>
                   {v.fuel_rate_ton_per_hr != null && (
                     <Row label="Fuel rate" value={`${v.fuel_rate_ton_per_hr} t/hr`} />
                   )}

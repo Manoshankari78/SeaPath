@@ -54,13 +54,18 @@ export const api = {
   optimizeRoute: (req: RouteRequest) =>
     client.post<RouteResponse>("/route/optimize", req).then((r) => r.data),
 
-  reoptimizeVoyage: (voyageId: number) =>
-    client.post<RouteResponse>(`/route/reoptimize/${voyageId}`).then((r) => r.data),
+  reoptimizeVoyage: (voyageId: number, currentPosition?: { lat: number; lon: number }) =>
+    client
+      .post<RouteResponse>(`/route/reoptimize/${voyageId}`, currentPosition ? { current_position: currentPosition } : null)
+      .then((r) => r.data),
 
   // --- fleet ---
   listFleet: () => client.get<VesselOut[]>("/fleet").then((r) => r.data),
 
   createVessel: (v: VesselCreate) => client.post<VesselOut>("/fleet", v).then((r) => r.data),
+
+  updateVesselMmsi: (id: number, mmsi: string | null) =>
+    client.patch<VesselOut>(`/fleet/${id}/mmsi`, { mmsi }).then((r) => r.data),
 
   deleteVessel: (id: number) => client.delete(`/fleet/${id}`),
 

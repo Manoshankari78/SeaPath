@@ -228,6 +228,16 @@ async def get_voyage_tracking(
         speed_multiplier=sim.speed_multiplier if sim else 1.0,
     )
 
+    provider = get_ais_provider()
+    if not provider.simulated:
+        fix = provider.get_vessel_position(voyage.vessel_id)
+        if fix:
+            fix.voyage_id = voyage.id
+            persist_fix(db, fix)
+            result.position = _fix_to_out(fix)
+            result.status = voyage.status
+        return result
+
     if not sim:
         return result
 
@@ -288,6 +298,17 @@ async def control_voyage_simulation(
     voyage = _owned_voyage(db, voyage_id, current_user)
 
     sim = simulation_registry.get(voyage_id)
+    if not get_ais_provider().simulated:
+        if control.action == "start" and voyage.status == "Planned":
+            voyage.status = "In-Progress"
+            db.commit()
+        elif control.action == "reset" and voyage.status != "Planned":
+            voyage.status = "Planned"
+            db.commit()
+        return await get_voyage_tracking(
+            voyage_id, include_weather=False, db=db, current_user=current_user
+        )
+
     if sim is None:
         speed = voyage.vessel.cruise_speed_knots if voyage.vessel else 18.0
         try:

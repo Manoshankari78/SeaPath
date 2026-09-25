@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import DATABASE_URL
@@ -58,6 +58,48 @@ def ensure_postgis_extension():
             "admin. The app will still run — spatial search falls back to "
             "a Python calculation if PostGIS isn't available.",
             exc,
+        )
+
+
+def migrate_existing_schema():
+    """Apply small additive fixes that ``metadata.create_all`` cannot do.
+
+    ``create_all`` creates missing tables but does not add columns to tables
+    already present in a persistent database volume. Keep this migration
+    additive so existing voyage and vessel records remain intact.
+    """
+    inspector = inspect(engine)
+    if inspector.has_table("vessels"):
+        vessel_columns = {column["name"] for column in inspector.get_columns("vessels")}
+        if "mmsi" not in vessel_columns:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE vessels ADD COLUMN mmsi VARCHAR(9)"))
+                logger.info("Added missing vessels.mmsi database column")
+        with engine.begin() as conn:
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_vessels_mmsi ON vessels (mmsi)"))
+
+    if not inspector.has_table("vessel_positions"):
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("vessel_positions")}
+    if "voyage_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE vessel_positions "
+                    "ADD COLUMN voyage_id INTEGER REFERENCES voyages(id)"
+                )
+            )
+            logger.info("Added missing vessel_positions.voyage_id database column")
+
+    # This index is declared in the ORM model. Ensure it is also present on
+    # databases whose tables predate that declaration.
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_vessel_positions_voyage_id "
+                "ON vessel_positions (voyage_id)"
+            )
         )
 
 

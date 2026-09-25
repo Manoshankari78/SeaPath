@@ -22,6 +22,10 @@ services:
     environment:
       - ALLOWED_ORIGINS=http://localhost:5173
       - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/seapath
+      - AIS_PROVIDER=${AIS_PROVIDER:-mock}
+      - AIS_API_URL=${AIS_API_URL:-wss://stream.aisstream.io/v0/stream}
+      - AIS_API_KEY=${AIS_API_KEY:-}
+      - AISSTREAM_STALE_SECONDS=${AISSTREAM_STALE_SECONDS:-180}
     depends_on:
       db:
         condition: service_healthy

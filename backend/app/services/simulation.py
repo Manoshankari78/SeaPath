@@ -152,6 +152,36 @@ class VoyageSimulation:
         lon = lon1 + (lon2 - lon1) * t
         return lat, lon, _bearing_deg(lat1, lon1, lat2, lon2)
 
+    def replace_remaining_route(self, new_route: list[tuple[float, float]]) -> None:
+        """Splice a newly planned leg onto the sailed prefix without teleporting."""
+        self.advance()
+        if len(new_route) < 2:
+            return
+        old_distance = self.distance_travelled_nm
+        lat, lon, _ = self.position()
+        leg = max(
+            0,
+            next((i for i in range(len(self.cumulative_nm) - 1)
+                  if self.cumulative_nm[i + 1] >= old_distance), len(self.route) - 2),
+        )
+        prefix = self.route[: leg + 1] + [(lat, lon)]
+        route = prefix + new_route[1:]
+        # Drop duplicate adjacent points at the splice.
+        self.route = [route[0]] + [p for i, p in enumerate(route[1:], 1)
+                                   if haversine_nm(*route[i - 1], *p) > 0.01]
+        self.cumulative_nm = [0.0]
+        for (a, b), (c, d) in zip(self.route, self.route[1:]):
+            self.cumulative_nm.append(self.cumulative_nm[-1] + haversine_nm(a, b, c, d))
+        self.total_nm = self.cumulative_nm[-1] if self.cumulative_nm else 0.0
+        # Preserve the traveled distance based on the actual prefix geometry.
+        self.distance_travelled_nm = sum(
+            haversine_nm(a[0], a[1], b[0], b[1])
+            for a, b in zip(prefix, prefix[1:])
+        )
+        self.finished = False
+        if self.running:
+            self.last_tick = datetime.now(timezone.utc)
+
     @property
     def progress_percent(self) -> float:
         if self.total_nm <= 0:
